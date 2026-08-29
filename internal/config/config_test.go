@@ -224,6 +224,54 @@ func TestLoadShutdownTimeoutDefault(t *testing.T) {
 	})
 }
 
+// TestLoadReplicaURLEnvVars verifies the read-replica DSN is read from the
+// canonical DATABASE_REPLICA_URL env var, with DB_REPLICA_URL retained as a
+// backward-compatible alias, and that neither is required.
+func TestLoadReplicaURLEnvVars(t *testing.T) {
+	t.Run("canonical DATABASE_REPLICA_URL wins", func(t *testing.T) {
+		withEnvVars(t, map[string]string{
+			"ENV":                   "development",
+			"DATABASE_REPLICA_URL":  "postgres://replica:pass@replica-host:5432/db",
+			"DB_REPLICA_URL":        "postgres://legacy:pass@legacy-host:5432/db",
+		}, func() {
+			cfg, err := Load(WithSecretsProvider(newValidProvider()))
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+			if cfg.DBReplicaConn != "postgres://replica:pass@replica-host:5432/db" {
+				t.Fatalf("expected canonical replica URL to win, got %q", cfg.DBReplicaConn)
+			}
+		})
+	})
+
+	t.Run("legacy DB_REPLICA_URL is honoured", func(t *testing.T) {
+		withEnvVars(t, map[string]string{
+			"ENV":                  "development",
+			"DB_REPLICA_URL":       "postgres://legacy:pass@legacy-host:5432/db",
+		}, func() {
+			cfg, err := Load(WithSecretsProvider(newValidProvider()))
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+			if cfg.DBReplicaConn != "postgres://legacy:pass@legacy-host:5432/db" {
+				t.Fatalf("expected legacy replica URL to be used, got %q", cfg.DBReplicaConn)
+			}
+		})
+	})
+
+	t.Run("absent replica URL is empty", func(t *testing.T) {
+		withEnvVars(t, map[string]string{"ENV": "development"}, func() {
+			cfg, err := Load(WithSecretsProvider(newValidProvider()))
+			if err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+			if cfg.DBReplicaConn != "" {
+				t.Fatalf("expected empty replica URL, got %q", cfg.DBReplicaConn)
+			}
+		})
+	})
+}
+
 func TestIsValidSecretRequiresSpecialCharacter(t *testing.T) {
 	if isValidSecret("NoSpecialChars123") {
 		t.Fatal("expected secret without special char to fail")
