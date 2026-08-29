@@ -272,7 +272,10 @@ func Load(opts ...Option) (Config, error) {
 		MaxGzipUncompressed:    getEnvInt64("MAX_GZIP_UNCOMPRESSED", 1024*1024*50), // 50MB
 		MaxGzipRatio:           getEnvFloat64("MAX_GZIP_RATIO", 10.0),
 		// DB pool — safe production defaults
-		DBReplicaConn:    getEnv("DB_REPLICA_URL", ""),
+		//
+		// DATABASE_REPLICA_URL is the canonical env var for the hot-standby
+		// read replica; DB_REPLICA_URL is kept as a backward-compatible alias.
+		DBReplicaConn:    getEnvFirst("", "DATABASE_REPLICA_URL", "DB_REPLICA_URL"),
 		RedisURL:         getEnv("REDIS_URL", ""),
 		CacheTTL:         getEnvInt("CACHE_TTL", 60), // 60 second default
 		DBPoolMaxConns:          DefaultDBPoolMaxConns,
@@ -700,6 +703,18 @@ func maskSecret(secret string) string {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+// getEnvFirst returns the value of the first environment variable in keys that
+// is non-empty, or fallback when none are set. Used to support canonical env
+// var names with legacy aliases (e.g. DATABASE_REPLICA_URL vs DB_REPLICA_URL).
+func getEnvFirst(fallback string, keys ...string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
 	}
 	return fallback
 }
