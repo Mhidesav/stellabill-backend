@@ -247,6 +247,34 @@ func (m *Manager) SetFlagWithVersion(flagName string, enabled bool, description 
 	}
 }
 
+// UpdateFlag atomically updates an existing flag's enabled state and returns the before and after values.
+// It updates both the in-memory flag configuration and the runtime override layer (db).
+// The returned before and after copies can be used for audit logging.
+func (m *Manager) UpdateFlag(flagName string, enabled bool, description string) (*Flag, *Flag, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	flag, exists := m.flags[flagName]
+	if !exists {
+		return nil, nil, fmt.Errorf("feature flag %q not found", flagName)
+	}
+
+	old := *flag
+
+	flag.Enabled = enabled
+	flag.UpdatedAt = time.Now()
+	flag.Version = time.Now().UnixNano()
+	if description != "" {
+		flag.Description = description
+	}
+
+	// Persist in the runtime override layer so the change remains effective.
+	m.db[flagName] = enabled
+
+	updated := *flag
+	return &old, &updated, nil
+}
+
 func (m *Manager) GetAllFlags() map[string]*Flag {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
