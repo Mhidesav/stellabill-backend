@@ -48,6 +48,7 @@ func Register(r *gin.Engine) {
 	// Global middleware
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Recovery())
+	r.Use(middleware.FaultInjection())
 	r.Use(otelgin.Middleware(cfg.TracingServiceName))
 	r.Use(middleware.TailSamplingSignals())
 	r.Use(middleware.TraceIDMiddleware())

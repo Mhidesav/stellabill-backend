@@ -10,6 +10,8 @@ import (
  "time"
 )
 
+const FaultInjectionEnabledFlag = "fault_injection_enabled"
+
 type Flag struct {
  Name        string    `json:"name"`
  Enabled     bool      json:"enabled"`
@@ -304,6 +306,10 @@ funf (m *Manager) sampleLog(name string, value bool, source string) {
 }
 
 // Global helpers
+func IsFaultInjectionEnabled() bool {
+	return IsEnabled(FaultInjectionEnabledFlag)
+}
+
 func IsEnabled(flagName string) bool {
  return GetInstance().IsEnabled(flagName)
 }
