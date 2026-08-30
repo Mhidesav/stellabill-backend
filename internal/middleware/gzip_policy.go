@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/klauspost/compress/brotli"
+	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zstd"
 )
@@ -42,7 +42,8 @@ func GzipPolicy(cfg GzipPolicyConfig) gin.HandlerFunc {
 		encoding = strings.TrimSpace(strings.ToLower(encoding))
 
 		if encoding == "" || encoding == "identity" {
-			goto responseCompress
+			applyResponseCompression(c, cfg)
+			return
 		}
 
 		if encoding != "gzip" {
@@ -118,26 +119,28 @@ func GzipPolicy(cfg GzipPolicyConfig) gin.HandlerFunc {
 		c.Request.Body = io.NopCloser(&decompressed)
 		c.Request.Header.Del("Content-Encoding")
 
-	responseCompress:
-		if cfg.ResponseCompression && !c.IsAborted() {
-			enc := negotiateEncoding(c)
-			if enc != "" {
-				minB := cfg.MinCompressBytes
-				if minB <= 0 {
-					minB = MinCompressBytes
-				}
-				cw := &compressingWriter{
-					ResponseWriter: c.Writer,
-					encoding:       enc,
-					minCompress:    minB,
-					statusCode:     http.StatusOK,
-				}
-				c.Writer = cw
-				defer cw.finalize()
-			}
-		}
-
+		applyResponseCompression(c, cfg)
 		c.Next()
+	}
+}
+
+func applyResponseCompression(c *gin.Context, cfg GzipPolicyConfig) {
+	if cfg.ResponseCompression && !c.IsAborted() {
+		enc := negotiateEncoding(c)
+		if enc != "" {
+			minB := cfg.MinCompressBytes
+			if minB <= 0 {
+				minB = MinCompressBytes
+			}
+			cw := &compressingWriter{
+				ResponseWriter: c.Writer,
+				encoding:       enc,
+				minCompress:    minB,
+				statusCode:     http.StatusOK,
+			}
+			c.Writer = cw
+			defer cw.finalize()
+		}
 	}
 }
 

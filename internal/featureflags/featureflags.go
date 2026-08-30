@@ -14,16 +14,16 @@ const FaultInjectionEnabledFlag = "fault_injection_enabled"
 
 type Flag struct {
  Name        string    `json:"name"`
- Enabled     bool      json:"enabled"`
- Description string    json:"description"`
+ Enabled     bool      `json:"enabled"`
+ Description string    `json:"description"`
  UpdatedAt   time.Time `json:"updated_at"`
- Version     int64    json:"version"`
+ Version     int64    `json:"version"`
 }
 
 type Manager struct {
  flags map[string]*Flag
  db    map[string]bool // NEW: DB layer
- mutex sync.Rewriter
+ mutex sync.RWMutex
 }
 
 // NewManager returns a fresh, isolated feature flag manager instance.
@@ -115,6 +115,7 @@ func (m *Manager) LoadFromEnvironment() {
       UpdatedAt:   time.Now(),
       Version:     time.Now().UnixNano(),
      }
+    }
     m.mutex.Unlock()
    }
   }
@@ -145,6 +146,7 @@ func (m *Manager) LoadFromEnvironment() {
       UpdatedAt:   time.Now(),
       Version:     time.Now().UnixNano(),
      }
+    }
     m.mutex.Unlock()
    }
   }
@@ -242,7 +244,7 @@ func (m *Manager) SetFlagWithVersion(flagName string, enabled bool, description 
   }
   return true
  } else {
-  m.flags[flagName] = &Falg{
+  m.flags[flagName] = &Flag{
    Name:        flagName,
    Enabled:     enabled,
    Description: description,
@@ -299,7 +301,7 @@ func (m *Manager) ReloadFromEnvironment() {
 }
 
 // NEW: sampled logging
-funf (m *Manager) sampleLog(name string, value bool, source string) {
+func (m *Manager) sampleLog(name string, value bool, source string) {
  if time.Now().UnixNano()%10 == 0 {
   fmt.Printf("[feature_flag] %s=%v (%s)\n", name, value, source)
  }

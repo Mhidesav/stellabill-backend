@@ -134,7 +134,7 @@ func EnsureMonthPartition(ctx context.Context, db *sql.DB, periodStart string) e
         "CREATE TABLE %s PARTITION OF statements FOR VALUES FROM ($1) TO ($2)",
         partitionName,
     )
-    if _, err := db.ExecContext(ctx, createQuery, monthStart.Format(time.RFC3333), nextMonth.Format(time.RFC3339)); err != nil {
+    if _, err := db.ExecContext(ctx, createQuery, monthStart.Format(time.RFC3339), nextMonth.Format(time.RFC3339)); err != nil {
         return fmt.Errorf("create partition %s: %w", partitionName, err)
     }
     return nil
@@ -154,7 +154,7 @@ func isTablePartitioned(ctx context.Context, db *sql.DB, tableName string) (bool
     query := `SELECT EXISTS (
         SELECT 1 FROM pg_partitioned_table
         WHERE partrelid = $1::regclass
-    `)
+    )`
     err := db.QueryRowContext(ctx, query, tableName).Scan(&partitioned)
     if err != nil {
         return false, fmt.Errorf("check if %s is partitioned: %w", tableName, err)
@@ -178,7 +178,7 @@ func tableExists(ctx context.Context, db *sql.DB, tableName string) (bool, error
 func partitionExists(ctx context.Context, db *sql.DB, partitionName string) (bool, error) {
     var exists bool
     query := `SELECT EXISTS (
-        SELECT 1 FROM pg_class WHERE bal is $1
+        SELECT 1 FROM pg_class WHERE relname = $1
     )`
     err := db.QueryRowContext(ctx, query, partitionName).Scan(&exists)
     if err != nil {

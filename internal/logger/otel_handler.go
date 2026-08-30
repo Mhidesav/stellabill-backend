@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -106,7 +107,7 @@ type OTelHandler struct {
 	// preKVs are OTel KeyValues already resolved from WithAttrs calls.
 	// Keys are fully qualified (group prefix already baked in) at the time
 	// WithAttrs is called, so they are immune to subsequent WithGroup calls.
-	preKVs []otellog.KeyValue
+	preKVs []attribute.KeyValue
 	// groups collects open WithGroup calls; they are prepended to attribute keys
 	// for *new* per-record attributes only.
 	groups []string
@@ -202,7 +203,7 @@ func (h *OTelHandler) Handle(ctx context.Context, r slog.Record) error {
 	rec.SetObservedTimestamp(time.Now())
 	rec.SetSeverity(slogLevelToOTelSeverity(r.Level))
 	rec.SetSeverityText(r.Level.String())
-	rec.SetBody(otellog.StringValue(r.Message))
+	rec.SetBody(attribute.StringValue(r.Message))
 
 	// Attach pre-registered attributes (keys already qualified at WithAttrs time).
 	if len(h.preKVs) > 0 {
@@ -220,9 +221,9 @@ func (h *OTelHandler) Handle(ctx context.Context, r slog.Record) error {
 	if span.SpanContext().IsValid() {
 		sc := span.SpanContext()
 		rec.AddAttributes(
-			otellog.String("trace_id", sc.TraceID().String()),
-			otellog.String("span_id", sc.SpanID().String()),
-			otellog.String("trace_flags", sc.TraceFlags().String()),
+			attribute.String("trace_id", sc.TraceID().String()),
+			attribute.String("span_id", sc.SpanID().String()),
+			attribute.String("trace_flags", sc.TraceFlags().String()),
 		)
 	}
 
@@ -248,7 +249,7 @@ func (h *OTelHandler) Handle(ctx context.Context, r slog.Record) error {
 func (h *OTelHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	// Convert and bake group-qualified keys now.
 	extra := attrsToKVs(attrs, h.groups)
-	newKVs := make([]otellog.KeyValue, len(h.preKVs)+len(extra))
+	newKVs := make([]attribute.KeyValue, len(h.preKVs)+len(extra))
 	copy(newKVs, h.preKVs)
 	copy(newKVs[len(h.preKVs):], extra)
 	return &OTelHandler{
@@ -313,15 +314,15 @@ func (h *OTelHandler) addAttr(rec *otellog.Record, a slog.Attr, groupPath []stri
 
 // attrsToKVs converts a slice of slog.Attr to OTel KeyValues, applying
 // groupPath as the key prefix.  Used by WithAttrs to bake keys eagerly.
-func attrsToKVs(attrs []slog.Attr, groupPath []string) []otellog.KeyValue {
+func attrsToKVs(attrs []slog.Attr, groupPath []string) []attribute.KeyValue {
 	// Use a temporary record as a collector.
 	var rec otellog.Record
 	h := &OTelHandler{} // lightweight instance, no logger needed
 	for _, a := range attrs {
 		h.addAttr(&rec, a, groupPath)
 	}
-	var out []otellog.KeyValue
-	rec.WalkAttributes(func(kv otellog.KeyValue) bool {
+	var out []attribute.KeyValue
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool {
 		out = append(out, kv)
 		return true
 	})
@@ -341,33 +342,33 @@ func buildKey(groups []string, key string) string {
 }
 
 // slogValueToOTelKV converts a slog.Value to an OTel log.KeyValue.
-func slogValueToOTelKV(key string, v slog.Value) otellog.KeyValue {
+func slogValueToOTelKV(key string, v slog.Value) attribute.KeyValue {
 	switch v.Kind() {
 	case slog.KindBool:
-		return otellog.Bool(key, v.Bool())
+		return attribute.Bool(key, v.Bool())
 	case slog.KindDuration:
-		return otellog.Int64(key, int64(v.Duration()))
+		return attribute.Int64(key, int64(v.Duration()))
 	case slog.KindFloat64:
-		return otellog.Float64(key, v.Float64())
+		return attribute.Float64(key, v.Float64())
 	case slog.KindInt64:
-		return otellog.Int64(key, v.Int64())
+		return attribute.Int64(key, v.Int64())
 	case slog.KindString:
-		return otellog.String(key, v.String())
+		return attribute.String(key, v.String())
 	case slog.KindTime:
-		return otellog.String(key, v.Time().UTC().Format(time.RFC3339Nano))
+		return attribute.String(key, v.Time().UTC().Format(time.RFC3339Nano))
 	case slog.KindUint64:
 		// OTel log API has no uint64 — use int64 with potential truncation only
 		// for values that fit, otherwise stringify.
 		u := v.Uint64()
 		if u <= 1<<63-1 {
-			return otellog.Int64(key, int64(u)) //nolint:gosec // bounds checked above
+			return attribute.Int64(key, int64(u)) //nolint:gosec // bounds checked above
 		}
-		return otellog.String(key, fmt.Sprintf("%d", u))
+		return attribute.String(key, fmt.Sprintf("%d", u))
 	case slog.KindLogValuer:
 		// Already resolved by the caller; stringify as fallback.
-		return otellog.String(key, v.String())
+		return attribute.String(key, v.String())
 	default:
-		return otellog.String(key, fmt.Sprintf("%v", v.Any()))
+		return attribute.String(key, fmt.Sprintf("%v", v.Any()))
 	}
 }
 
